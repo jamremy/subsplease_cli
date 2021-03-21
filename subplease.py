@@ -1,68 +1,57 @@
 # https://realpython.com/python-logging/
 # https://realpython.com/python-requests/
-import logging
 # https://docs.python.org/3/library/argparse.html#nargs
 # https://pymotw.com/3/argparse/
 # https://docs.python.org/3/library/argparse.html
 import argparse
 import json
+import logging
+import subprocess
+import sys
 import urllib.parse
+
 # https://requests.readthedocs.io/en/latest/user/quickstart/
 import requests
-import sys
-import subprocess
 from requests.exceptions import HTTPError
-
-
 
 HOME = "https://subsplease.org/"
 
 # API config
 API_URL = urllib.parse.urljoin("https://subsplease.org/", "api/")
-TIME_ZONE = {"tz" : "Europe/Paris"}
+TIME_ZONE = {"tz": "Europe/Paris"}
 
-def fetch(url:str, payload:dict):
+
+def fetch(url: str, payload: dict):
     try:
         response = requests.get(url, params=payload)
         response.raise_for_status()
+
+        logging.info('Updated!')
+        return json.loads(response.text)
     except HTTPError as http_err:
         logging.error(f'HTTP error occurred: {http_err}')
     except Exception as err:
         logging.error(f'Other error occurred: {err}')
-    else:
-        logging.info('Update Successful!')
 
-    return json.loads(response.text)
 
 def fetch_schedule():
-    payload = {"f" : "schedule", "h" : "true", **TIME_ZONE}
+    payload = {"f": "schedule", "h": "true", **TIME_ZONE}
     return fetch(API_URL, payload)["schedule"]
 
+
 def fetch_latest():
-    payload = {"f" : "latest", **TIME_ZONE}
+    payload = {"f": "latest", **TIME_ZONE}
     return fetch(API_URL, payload)
 
-# def print_latest():
-#     latest = fetch_latest()
-#     for key, value in latest.items():
-#         time = f'[{value["time"]}]'.upper() if value["time"] == "New" else value["time"]
-
-#         print(f'\"{value["show"]}\" Ep {value["episode"]} {value["release_date"]} {time}')
-#         for dl in value["downloads"]:
-#             print(f'\t{dl["res"]} - {dl["magnet"]}')
-#         print()
 
 def schedule():
-    schedule = fetch_schedule()
-
-    for item in schedule:
+    for item in fetch_schedule():
         checkmark = "[✔]" if item["aired"] else "[ ]"
         print(f'{checkmark} {item["time"]} {item["title"]}')
 
 
-def download(show_name:str, resolution):
+def download(show_name: str, resolution):
     latest = fetch_latest()
-    # xdg-open
     show = None
     show_name_stripped = show_name.strip()
     for key, value in latest.items():
@@ -74,7 +63,7 @@ def download(show_name:str, resolution):
         print(f"Not found: {show_name_stripped}", file=sys.stderr)
         return
 
-    downloads = value["downloads"] if show else None
+    downloads = show["downloads"] if show else None
     s = [item for item in downloads if resolution[:-1] == item["res"]]
     f = s[0]
     link = urllib.parse.unquote(f["magnet"])
@@ -82,7 +71,7 @@ def download(show_name:str, resolution):
     print(f"script returned: {result}", file=sys.stderr)
 
 
-def default(all_shows:bool=None):
+def default(all_shows: bool = None):
     if all_shows:
         shows = fetch_latest().values()
     else:
@@ -99,6 +88,7 @@ def default(all_shows:bool=None):
 
         print(line)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--all", action="store_true", default=False, help="list only the new shows")
@@ -107,10 +97,9 @@ if __name__ == "__main__":
     download_choices = ["480p", "540p", "720p", "1080p", "xdcc"]
     group = parser.add_argument_group('download')
     group.add_argument("-d", "--download", type=str, action="store", help="download a show")
-    group.add_argument("-r", "--resolution", type=str, action="store", choices=download_choices, default=download_choices[3], help="the resolution of the show") # add nargs='+' to support multiple resolution
-
-    # TODO: list the available resolutions
-    # TODO: -r on it's own should not work.
+    group.add_argument("-r", "--resolution", type=str, action="store", choices=download_choices,
+                       default=download_choices[3],
+                       help="the resolution of the show")  # add nargs='+' to support multiple resolution
 
     args = parser.parse_args()
 
